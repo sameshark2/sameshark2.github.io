@@ -262,11 +262,11 @@
     s.connect(g); g.connect(master); s.start(); curVoice = s;
   }
   // 声ファイル集（voice/voices.json があれば使う。なければ読み上げ）
-  const VLIB = {}; let vlibCredit = '';
+  const VLIB = {}; let vlibCredit = '', vlibLabel = '';
   async function loadVoiceLib() {
     try {
       const j = await (await fetch('voice/voices.json', { cache: 'no-cache' })).json();
-      vlibCredit = j.credit || '';
+      vlibCredit = j.credit || ''; vlibLabel = j.label || vlibCredit || 'ボイス';
       for (const [k, files] of Object.entries(j.clips || {})) {
         VLIB[k] = (await Promise.all(files.map(async f => { try { return await AC.decodeAudioData(await (await fetch('voice/' + f)).arrayBuffer()); } catch (_) { return null; } }))).filter(Boolean);
       }
@@ -294,7 +294,7 @@
     try { const ab = await (await fetch(url)).arrayBuffer(); voiceBuf = trim(await AC.decodeAudioData(ab)); } catch (_) { voiceBuf = null; }
     updVstate();
   }
-  function updVstate() { $('#vstate').textContent = 'いまの声：' + (voiceBuf ? '🎙️ 録音した声' : (VLIB.ata && VLIB.ata.length) ? '🟢 ' + (vlibCredit || 'ボイス') : '🗣️ よみあげ'); }
+  function updVstate() { $('#vstate').textContent = 'いまの声：' + (voiceBuf ? '🎙️ 録音した声' : (VLIB.ata && VLIB.ata.length) ? '🏠 ' + vlibLabel : '🗣️ よみあげ'); }
 
   // ================= ゲーム（30びょう チャレンジ） =================
   const GAME_MS = 30000;
