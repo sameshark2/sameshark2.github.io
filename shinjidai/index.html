@@ -30,22 +30,25 @@
   #toast { position:fixed; top:40%; left:50%; transform:translate(-50%,-50%); font-size:28px; font-weight:800; letter-spacing:.1em;
     opacity:0; transition:opacity .4s; z-index:6; pointer-events:none; text-shadow:0 0 20px rgba(0,0,0,.6); }
   #toast.on { opacity:1; }
+  #bar button { padding:10px 14px; font-size:14px; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="e" style="pointer-events:none"></canvas>
 
 <div id="intro">
   <h1>新時代</h1>
   <p>あなたのスマホのセンサーが、そのまま筆になる。<br>傾き・揺れ・指先・時間・場所から、今この瞬間だけの絵が生まれます。</p>
   <ul class="how">
     <li>📱 傾ける → 光が流れる方向が変わる</li>
-    <li>👆 触る → 光が湧き出す</li>
+    <li>👆 触る → 光と絵文字が湧き出す＆音が鳴る</li>
     <li>🫨 振る → 色の世界が切り替わる</li>
     <li>🕒 時刻と場所 → 最初の色が決まる</li>
+    <li>🎹 バッハ「平均律 前奏曲 ハ長調」が流れる</li>
   </ul>
   <button id="start">はじめる</button>
-  <p style="font-size:12px">センサーの許可を求められたら「許可」を押してください。<br>データは端末の中だけで使われ、送信されません。</p>
+  <p style="font-size:12px">センサーの許可を求められたら「許可」を押してください。<br>データは端末の中だけで使われ、送信されません。<br>🔊 音が出ます（iPhoneはマナーモードを解除）</p>
 </div>
 
 <div id="hud"></div>
@@ -54,17 +57,20 @@
   <button id="save">💾 保存</button>
   <button id="clear">🧹 消す</button>
   <button id="info">📊 センサー</button>
+  <button id="snd">🔊 音</button>
 </div>
 
 <script>
 (() => {
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  const ecv = document.getElementById('e'), ectx = ecv.getContext('2d');
   let W, H, DPR;
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     W = innerWidth; H = innerHeight;
     cv.width = W * DPR; cv.height = H * DPR;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ecv.width = W * DPR; ecv.height = H * DPR; ectx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H);
   }
   addEventListener('resize', resize); resize();
@@ -100,9 +106,12 @@
     if (navigator.vibrate) navigator.vibrate([40, 40, 80]);
     toast('新しい世界');
     for (let i = 0; i < 300; i++) spawn(W / 2, H / 2, 8);
+    for (let i = 0; i < 40; i++) spawnEmoji(W / 2, H / 2, 9);
+    shakeChord();
   }
 
   async function start() {
+    try { initAudio(); AC.resume(); } catch (_) {}
     // iOS はユーザー操作中に許可が必要
     try {
       if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function')
@@ -128,7 +137,11 @@
 
   // ---- タッチ / マウス ----
   const ptrs = new Map();
-  cv.addEventListener('pointerdown', e => { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY }); });
+  cv.addEventListener('pointerdown', e => {
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, d: 0 });
+    for (let i = 0; i < 6; i++) spawnEmoji(e.clientX, e.clientY, 4);
+    touchNote(e.clientY);
+  });
   cv.addEventListener('pointermove', e => {
     const p = ptrs.get(e.pointerId);
     if (p) { p.px = p.x; p.py = p.y; p.x = e.clientX; p.y = e.clientY; }
@@ -139,6 +152,105 @@
   const up = e => ptrs.delete(e.pointerId);
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   addEventListener('keydown', e => { if (e.key === ' ') shake(); });
+
+
+  // ================= 音（Web Audio で合成：バッハ BWV846 前奏曲） =================
+  const N = n => { const m = n.match(/^([A-G])([#b]?)(\d)$/); const b = {C:0,D:2,E:4,F:5,G:7,A:9,B:11}[m[1]] + (m[2]==='#'?1:m[2]==='b'?-1:0); return 440 * Math.pow(2, (b + (+m[3]+1)*12 - 69) / 12); };
+  const BARS = `C4 E4 G4 C5 E5|C4 D4 A4 D5 F5|B3 D4 G4 D5 F5|C4 E4 G4 C5 E5|C4 E4 A4 E5 A5|C4 D4 F#4 A4 D5|B3 D4 G4 D5 G5|B3 C4 E4 G4 C5|A3 C4 E4 G4 C5|D3 A3 D4 F#4 C5|G3 B3 D4 G4 B4|G3 Bb3 E4 G4 C#5|F3 A3 D4 A4 D5|F3 Ab3 D4 F4 B4|E3 G3 C4 G4 C5|E3 F3 A3 C4 F4|D3 F3 A3 C4 F4|G2 D3 G3 B3 F4|C3 E3 G3 C4 E4|C3 G3 Bb3 C4 E4|F2 F3 A3 C4 E4|F#2 C3 A3 C4 Eb4|Ab2 F3 B3 C4 D4|G2 F3 G3 B3 D4|G2 E3 G3 C4 E4|G2 D3 G3 C4 F4|G2 D3 G3 B3 F4|G2 Eb3 A3 C4 F#4|G2 E3 G3 C4 G4|G2 D3 G3 C4 F4|G2 D3 G3 B3 F4|C2 C3 G3 Bb3 E4`
+    .split('|').map(b => b.split(' ').map(N));
+  const ORDER = [0,1,2,3,4,2,3,4, 0,1,2,3,4,2,3,4];
+  let AC = null, master, rev, pan, soundOn = true, bar = 0, step = 0, nextT = 0;
+  const STEP = 0.16;
+  function initAudio() {
+    if (AC) return;
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value = .55;
+    pan = AC.createStereoPanner ? AC.createStereoPanner() : AC.createGain();
+    // 簡易リバーブ（ホールっぽい響き）
+    rev = AC.createConvolver();
+    const len = AC.sampleRate * 2.8, ir = AC.createBuffer(2, len, AC.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3); }
+    rev.buffer = ir;
+    const wet = AC.createGain(); wet.gain.value = .35;
+    master.connect(pan); pan.connect(AC.destination); master.connect(rev); rev.connect(wet); wet.connect(AC.destination);
+    nextT = AC.currentTime + .3;
+    setInterval(schedule, 50);
+  }
+  // ピアノ風の音
+  function note(freq, t, vel = .2, dur = 2.2) {
+    const o1 = AC.createOscillator(), o2 = AC.createOscillator(), g = AC.createGain(), f = AC.createBiquadFilter();
+    o1.type = 'triangle'; o2.type = 'sine'; o1.frequency.value = freq; o2.frequency.value = freq * 2;
+    const g2 = AC.createGain(); g2.gain.value = .25;
+    f.type = 'lowpass'; f.frequency.setValueAtTime(Math.min(9000, freq * 8), t); f.frequency.exponentialRampToValueAtTime(Math.max(300, freq * 1.5), t + dur);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel, t + .008); g.gain.exponentialRampToValueAtTime(.0008, t + dur);
+    o1.connect(f); o2.connect(g2); g2.connect(f); f.connect(g); g.connect(master);
+    o1.start(t); o2.start(t); o1.stop(t + dur + .05); o2.stop(t + dur + .05);
+  }
+  function schedule() {
+    if (!soundOn || AC.state !== 'running') { nextT = AC.currentTime + .1; return; }
+    while (nextT < AC.currentTime + .25) {
+      const notes = BARS[bar], idx = ORDER[step], f = notes[idx];
+      note(f, nextT, step % 8 === 0 ? .22 : .15, idx < 2 ? 3.2 : 1.8);
+      // 音に合わせて光る（高い音ほど上）
+      const delay = Math.max(0, (nextT - AC.currentTime) * 1000);
+      const y = H * (1 - (Math.log2(f / 65) / 5.5)), x = W * (.15 + .7 * (step / 15));
+      setTimeout(() => { for (let i = 0; i < 4; i++) spawn(x, y, 1.2); }, delay);
+      nextT += STEP;
+      if (++step === 16) { step = 0; bar = (bar + 1) % BARS.length; if (bar === 0) nextT += STEP * 4; }
+    }
+  }
+  // 指で触ると今の和音から音が鳴る（上ほど高い）
+  let lastTouchNote = 0;
+  function touchNote(y) {
+    if (!AC || !soundOn) return;
+    const now = AC.currentTime;
+    if (now - lastTouchNote < .09) return;
+    lastTouchNote = now;
+    const chord = BARS[bar].slice(1), k = Math.max(0, Math.min(chord.length*2 - 1, Math.floor((1 - y / H) * chord.length * 2)));
+    note(chord[k % chord.length] * (k >= chord.length ? 2 : 1), now, .13, 1.6);
+  }
+  function shakeChord() {
+    if (!AC || !soundOn) return;
+    const t = AC.currentTime;
+    BARS[bar].forEach((f, i) => { note(f, t + i * .04, .14, 3); note(f * 2, t + .2 + i * .04, .08, 3); });
+  }
+  const sndBtn = document.getElementById('snd');
+  sndBtn.onclick = () => {
+    soundOn = !soundOn; sndBtn.textContent = soundOn ? '🔊 音' : '🔇 音';
+    if (AC) master.gain.setTargetAtTime(soundOn ? .55 : 0, AC.currentTime, .05);
+  };
+
+  // ================= 絵文字 =================
+  const EMOJI = [['✨','🌟','💫','⭐','🌙','🪐'], ['🫧','🐬','💎','🧊','🌊','🦋'], ['🌸','🌺','💖','🎀','🌷','🍓'], ['🍀','🌿','🐸','🌱','🍃','🦖'], ['🚀','🛸','👾','🌈','🎉','🔥']];
+  const E = [], EMAX = 160, ecache = new Map();
+  function emojiImg(ch) {
+    if (ecache.has(ch)) return ecache.get(ch);
+    const c = document.createElement('canvas'); c.width = c.height = 96;
+    const x = c.getContext('2d'); x.font = '72px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(ch, 48, 54);
+    ecache.set(ch, c); return c;
+  }
+  function spawnEmoji(x, y, sp = 3, vx0 = 0, vy0 = 0) {
+    if (E.length >= EMAX) E.shift();
+    const set = EMOJI[pIdx], a = Math.random() * Math.PI * 2, s = 1 + Math.random() * sp;
+    E.push({ x, y, vx: Math.cos(a) * s + vx0, vy: Math.sin(a) * s + vy0 - 1.5, rot: Math.random() * 6, vr: (Math.random() - .5) * .15,
+      size: 22 + Math.random() * 30, life: 1, img: emojiImg(set[(Math.random() * set.length) | 0]) });
+  }
+  function drawEmoji() {
+    ectx.clearRect(0, 0, W, H);
+    for (let i = E.length - 1; i >= 0; i--) {
+      const e = E[i];
+      e.vx += S.gx * .6; e.vy += S.gy * .6 - .02; e.vx *= .985; e.vy *= .985;
+      e.x += e.vx; e.y += e.vy; e.rot += e.vr; e.life -= .006;
+      if (e.x < 0 || e.x > W) { e.vx *= -.8; e.x = Math.max(0, Math.min(W, e.x)); }
+      if (e.y < 0 || e.y > H) { e.vy *= -.8; e.y = Math.max(0, Math.min(H, e.y)); }
+      if (e.life <= 0) { E.splice(i, 1); continue; }
+      const sc = e.size * (e.life < .2 ? e.life / .2 : Math.min(1, (1 - e.life) * 8 + .3));
+      ectx.save(); ectx.globalAlpha = Math.min(1, e.life * 1.5); ectx.translate(e.x, e.y); ectx.rotate(e.rot);
+      ectx.drawImage(e.img, -sc / 2, -sc / 2, sc, sc); ectx.restore();
+    }
+    ectx.globalAlpha = 1;
+  }
 
   // ---- パーティクル ----
   const P = [], MAX = 2500;
@@ -161,6 +273,9 @@
     for (const p of ptrs.values()) {
       const vx = (p.x - p.px) * .3, vy = (p.y - p.py) * .3;
       for (let i = 0; i < 6; i++) spawn(p.x, p.y, 2.5, vx, vy);
+      p.d += Math.hypot(p.x - p.px, p.y - p.py);
+      if (t % 5 === 0) spawnEmoji(p.x, p.y, 2, vx * .5, vy * .5);
+      if (p.d > 40) { p.d = 0; touchNote(p.y); }
       p.px = p.x; p.py = p.y;
     }
     // 何もしなくても少しずつ生まれる
@@ -185,6 +300,8 @@
       ctx.lineWidth = p.r;
       ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(p.x, p.y); ctx.stroke();
     }
+    drawEmoji();
+    if (pan && pan.pan) pan.pan.value = Math.max(-1, Math.min(1, S.gx * 2));
     if (hud.classList.contains('show') && t % 6 === 0) drawHud();
     requestAnimationFrame(frame);
   }
@@ -201,9 +318,11 @@
       `電池 ${S.battery == null ? '—' : Math.round(S.battery * 100) + '%'} ・ 色相 ${Math.round(baseHue)}°`;
   }
   document.getElementById('info').onclick = () => { hud.classList.toggle('show'); drawHud(); };
-  document.getElementById('clear').onclick = () => { P.length = 0; ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H); };
+  document.getElementById('clear').onclick = () => { P.length = 0; E.length = 0; ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H); };
   document.getElementById('save').onclick = () => {
-    cv.toBlob(async blob => {
+    const out = document.createElement('canvas'); out.width = cv.width; out.height = cv.height;
+    const o = out.getContext('2d'); o.drawImage(cv, 0, 0); o.drawImage(ecv, 0, 0);
+    out.toBlob(async blob => {
       const name = `shinjidai-${Date.now()}.png`;
       const file = new File([blob], name, { type: 'image/png' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
