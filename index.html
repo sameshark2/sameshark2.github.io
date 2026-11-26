@@ -1,90 +1,49 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Progate</title>
-  <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
-  <link rel="stylesheet" type="text/css" href="stylesheet.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sameshark2 のページ</title>
+<style>
+  :root { --bg:#f6f4fb; --card:#fff; --fg:#2d2640; --dim:#6f6787; --line:#e6e1f2; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16131f; --card:#221d30; --fg:#f1eefa; --dim:#a59dbd; --line:#342c47; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif; }
+  main { max-width:560px; margin:0 auto; padding:40px 16px 48px; }
+  h1 { font-size:24px; margin:0 0 6px; }
+  .lead { color:var(--dim); margin:0 0 28px; font-size:14px; }
+  a.card { display:flex; align-items:center; gap:16px; background:var(--card); border:1px solid var(--line); border-radius:20px;
+    padding:18px; margin:0 0 14px; color:inherit; text-decoration:none; transition:transform .15s, box-shadow .15s; }
+  a.card:hover, a.card:active { transform:translateY(-2px); box-shadow:0 8px 24px rgba(60,40,120,.12); }
+  .icon { width:64px; height:64px; flex:none; border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:34px; }
+  .icon img { width:100%; height:100%; border-radius:16px; }
+  .t { font-size:18px; font-weight:700; margin:0 0 4px; }
+  .d { font-size:13px; color:var(--dim); margin:0; line-height:1.6; }
+  .go { margin-left:auto; color:var(--dim); font-size:22px; }
+</style>
 </head>
 <body>
-  <header>
-    <div class="container">
-      <div class="header-left">
-        <img class="logo" src="https://prog-8.com/images/html/advanced/main_logo.png">
-      </div>
-      <span class="fa fa-bars menu-icon"></span>
-      <div class="header-right">
-        <a href="#">レッスン</a>
-        <a href="#">新規登録</a>
-        <a href="#" class="login">ログイン</a>
-      </div>
-    </div>
-  </header>
-  <div class="top-wrapper">
-    <div class="container">
-      <h1>LEARN TO CODE.<br>LEARN TO BE CREATIVE.</h1>
-      <p>Progateはオンラインプログラミング学習サービスです。<br>初心者にもやさしいスライドとレッスンで、ウェブサービスを作りながらプログラミングを学んでいきましょう。</p>
-      <div class="btn-wrapper">
-        <a href="#" class="btn signup">新規登録はこちら</a>
-        <p>or</p>
-        <a href="#" class="btn facebook"><span class="fa fa-facebook"></span>Facebookで登録</a>
-        <a href="#" class="btn twitter"><span class="fa fa-twitter"></span>Twitterで登録</a>
-      </div>
-    </div>
-  </div>
-  <div class="lesson-wrapper">
-    <div class="container">
-      <div class="heading">
-        <h2>Learn Where to Get Started!</h2>
-      </div>
-      <div class="lessons">
-        <div class="lesson">
-          <div class="lesson-icon">
-            <img src="https://prog-8.com/images/html/advanced/html.png">
-            <p>HTML & CSS</p>
-          </div>
-          <p class="text-contents">ウェブページの作成に使用される言語です。HTMLとCSSを組み合わせることで、静的なページを作り上げることができます。</p>
-        </div>
-        <div class="lesson">
-          <div class="lesson-icon">
-            <img src="https://prog-8.com/images/html/advanced/jQuery.png">
-            <p>jQuery</p>
-          </div>
-          <p class="text-contents">素敵な動きを手軽に実装できるJavaScriptライブラリです。 アニメーション効果をつけたり、Ajax（エイジャックス）を使って外部ファイルを読み込んだりと色々なことができます。</p>
-        </div>
-        <div class="lesson">
-          <div class="lesson-icon">
-            <img src="https://prog-8.com/images/html/advanced/ruby.png">
-            <p>Ruby</p>
-          </div>
-          <p class="text-contents">オープンソースの動的なプログラミング言語で、 シンプルさと高い生産性を備えています。大きなWebアプリケーションから小さな日用ツールまで、さまざまなソフトウェアを作ることができます。</p>
-        </div>
-        <div class="lesson">
-          <div class="lesson-icon">
-            <img src="https://prog-8.com/images/html/advanced/php.png">
-            <p>PHP</p>
-          </div>
-          <p class="text-contents">HTMLだけではページの内容を変えることはできません。PHPはHTMLにプログラムを埋め込み、それを可能にします。</p>
-        </div>
-      </div>
-      <div class="clear"></div>
-    </div>
-  </div>
-  <div class="message-wrapper">
-    <div class="container">
-      <div class="heading">
-        <h2>さぁ、あなたもProgateでプログラミングを学んでみませんか?</h2>
-        <h3>Let's learn to code, learn to be creative!</h3>
-      </div>
-      <span class="btn message">さっそく開発する</span>
-    </div>
-  </div>
-  <footer>
-    <div class="container">
-      <img src="https://prog-8.com/images/html/advanced/footer_logo.png">
-      <p>Learn to Code, Learn to be Creative.</p>
-    </div>
-  </footer>
+<main>
+  <h1>sameshark2 のページ</h1>
+  <p class="lead">遊びたいもの・見たいものを選んでね</p>
+
+  <a class="card" href="shiho/">
+    <div class="icon"><img src="shiho/icon-192.png" alt=""></div>
+    <div><p class="t">しほんぬタッピング！</p><p class="d">詩歩ちゃん専用。泡をタッチして30秒で何個割れるかなゲーム</p></div>
+    <span class="go">›</span>
+  </a>
+
+  <a class="card" href="shinjidai/">
+    <div class="icon" style="background:linear-gradient(135deg,#5b8cff,#b45bff,#ff6fa8)">✨</div>
+    <div><p class="t">新時代</p><p class="d">スマホを傾けて・触って・振って、光と絵文字とバッハで絵を描く</p></div>
+    <span class="go">›</span>
+  </a>
+
+  <a class="card" href="progate/">
+    <div class="icon" style="background:#239b76;color:#fff">📘</div>
+    <div><p class="t">Progate 練習サイト</p><p class="d">Progate の HTML &amp; CSS レッスンで作った練習ページ</p></div>
+    <span class="go">›</span>
+  </a>
+</main>
 </body>
 </html>
