@@ -72,6 +72,28 @@
   .b-try { background:#4aa8ff; } .b-del { background:#b9a6bb; } .b-bgm { background:#5fc98a; } .b-close { background:#5a3d5c; }
   .row { display:flex; align-items:center; gap:10px; margin:10px 0; font-size:15px; }
   .row input { flex:1; accent-color:#ff5c9d; }
+  .overlay { position:fixed; inset:0; z-index:15; background:rgba(90,61,92,.35); display:none; align-items:center; justify-content:center; padding:16px; }
+  .overlay.on { display:flex; }
+  #rank { z-index:18; }
+  #rScore { font-family:var(--font); font-size:96px; line-height:1; color:#ff9f1a; text-shadow:0 5px 0 #ffd9a0; margin:10px 0 0; }
+  .unit { font-family:var(--font); font-size:20px; color:#5a3d5c; }
+  #rRank { font-family:var(--font); font-size:20px; color:var(--pink); margin:10px 0 14px; min-height:28px; }
+  .tabs { display:flex; gap:6px; background:#ffe6f0; border-radius:16px; padding:4px; margin:8px 0; }
+  .card .tabs button { margin:0; padding:10px; font-size:16px; background:transparent; color:#b07a9e; border-radius:12px; }
+  .card .tabs button.on { background:#ff5c9d; color:#fff; }
+  #sum { font-size:13px; color:#8a748c; margin:6px 0; }
+  #list { list-style:none; padding:0; margin:8px 0; max-height:52vh; overflow-y:auto; text-align:left; touch-action:pan-y; -webkit-overflow-scrolling:touch; }
+  #list li { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:14px; background:#fff5fa; margin:6px 0; }
+  #list li.new { outline:3px solid #ff5c9d; }
+  #list li.empty { justify-content:center; color:#8a748c; font-size:14px; }
+  .rk { font-family:var(--font); width:36px; text-align:center; font-size:20px; color:#b07a9e; }
+  .sc { font-family:var(--font); font-size:22px; color:#ff9f1a; min-width:62px; }
+  .dt { font-size:13px; color:#8a748c; flex:1; }
+  .bar { height:8px; border-radius:4px; background:linear-gradient(90deg,#ffb3cf,#ff5c9d); margin-top:5px; }
+  #rankBtn { font-family:var(--font); font-size:20px; color:var(--pink); background:#fff; border:none; border-radius:999px; padding:12px 34px; box-shadow:0 6px 0 #ffb3cf; cursor:pointer; }
+  #rankBtn:active { transform:translateY(4px); box-shadow:0 2px 0 #ffb3cf; }
+  #timer { color:#4aa8ff; } #timer.warn { color:#ff3b6b; animation:pulse .5s infinite; }
+  #credit { position:absolute; bottom:calc(8px + env(safe-area-inset-bottom)); left:0; right:0; font-size:11px; color:#b07a9e; font-family:-apple-system,sans-serif; }
   #vstate { font-size:14px; color:#5a3d5c; margin:4px 0 8px; }
 </style>
 </head>
@@ -87,12 +109,36 @@
   <h1 class="logo" id="logo"></h1>
   <div class="for">💕 しほちゃん せんよう 💕</div>
   <button id="play">あそぶ！</button>
-  <div id="hint">🎵 もじや どうぶつを さわってみてね</div>
+  <div id="hint">🫧 30びょうで あわを いくつ われるかな？</div>
+  <button id="rankBtn">🏆 ランキング</button>
+  <div id="credit"></div>
 </div>
 
-<div id="hud"><div class="pill" id="score">⭐ 0</div><div class="pill" id="lv">Lv.1</div></div>
+<div id="hud"><div class="pill" id="score">⭐ 0</div><div class="pill" id="timer">⏱ 30</div></div>
 <div id="banner"></div>
 <div id="gear" title="おとなの人は長押し"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/></svg>⚙️</div>
+
+<div id="result" class="overlay">
+  <div class="card">
+    <h2>おしまい！</h2>
+    <div id="rScore">0</div>
+    <div class="unit">こ わったよ！</div>
+    <div id="rRank"></div>
+    <button class="b-rec" id="again">🔁 もういちど</button>
+    <button class="b-try" id="toRank">🏆 ランキング</button>
+    <button class="b-close" id="toTitle">🏠 タイトルへ</button>
+  </div>
+</div>
+
+<div id="rank" class="overlay">
+  <div class="card">
+    <h2>🏆 しほちゃんの きろく</h2>
+    <div class="tabs"><button data-tab="top" class="on">ランキング</button><button data-tab="hist">これまで</button></div>
+    <div id="sum"></div>
+    <ol id="list"></ol>
+    <button class="b-close" id="rankClose">もどる</button>
+  </div>
+</div>
 
 <div id="menu">
   <div class="card">
@@ -141,14 +187,15 @@
   }
 
   // ================= 音 =================
+  const BGM_VOL = .09;
   let AC = null, master, bgmGain, sfxGain, bgmOn = store.get('shiho-bgm') !== 'off', vol = +(store.get('shiho-vol') || .8), voiceBuf = null;
   function initAudio() {
     if (AC) return;
     AC = new (window.AudioContext || window.webkitAudioContext)();
     master = AC.createGain(); master.gain.value = vol; master.connect(AC.destination);
     sfxGain = AC.createGain(); sfxGain.connect(master);
-    bgmGain = AC.createGain(); bgmGain.gain.value = bgmOn ? .22 : 0; bgmGain.connect(master);
-    loadVoice(); bgmT = AC.currentTime + .4; setInterval(bgmTick, 60);
+    bgmGain = AC.createGain(); bgmGain.gain.value = bgmOn ? BGM_VOL : 0; bgmGain.connect(master);
+    loadVoice(); loadVoiceLib(); bgmT = AC.currentTime + .4; setInterval(bgmTick, 60);
   }
   function tone(f, t, o = {}) {
     const { type = 'sine', dur = .3, v = .3, to = null, dest = sfxGain } = o;
@@ -158,8 +205,8 @@
     osc.connect(g); g.connect(dest); osc.start(t); osc.stop(t + dur + .05);
   }
   const PENTA = [523, 587, 659, 784, 880, 1047, 1175, 1319];
-  const sfxPop = () => { const t = AC.currentTime, f = rnd(500, 800); tone(f, t, { dur: .16, v: .35, to: f * 2.2 }); };
-  const sfxBubble = () => { const t = AC.currentTime; [0, 2, 4, 7].forEach((k, i) => tone(PENTA[k % 8] * (k > 6 ? 1 : 1), t + i * .06, { type: 'triangle', dur: .3, v: .22 })); };
+  const sfxPop = () => { const t = AC.currentTime, f = rnd(500, 800); tone(f, t, { dur: .16, v: .16, to: f * 2.2 }); };
+  const sfxBubble = () => { const t = AC.currentTime; [0, 2, 4, 7].forEach((k, i) => tone(PENTA[k % 8] * (k > 6 ? 1 : 1), t + i * .06, { type: 'triangle', dur: .3, v: .15 })); };
   const sfxFanfare = () => { const t = AC.currentTime; [[523, 0], [659, .12], [784, .24], [1047, .4], [784, .55], [1047, .7]].forEach(([f, d]) => { tone(f, t + d, { type: 'square', dur: .25, v: .08 }); tone(f, t + d, { type: 'triangle', dur: .4, v: .18 }); }); };
 
   // BGM：きらきら星（オルゴール風）
@@ -193,16 +240,46 @@
     jaVoices.forEach(v => { const o = document.createElement('option'); o.value = v.name; o.textContent = 'よみあげ：' + v.name; if (v === jaVoice) o.selected = true; sel.appendChild(o); });
   }
   if ('speechSynthesis' in window) { findVoice(); speechSynthesis.onvoiceschanged = findVoice; }
-  function speak(text, pitch = 1.8) {
+  function speak(text, pitch = 1.3) {
     if (!('speechSynthesis' in window)) return;
+    duck();
     if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text); u.lang = 'ja-JP'; if (jaVoice) u.voice = jaVoice;
-    u.pitch = pitch; u.rate = 1.05; u.volume = Math.min(1, vol * 1.2); speechSynthesis.speak(u);
+    u.pitch = pitch; u.rate = 1.05; u.volume = 1; speechSynthesis.speak(u);
   }
+  // 声を鳴らす間は BGM を小さくして 声を聞きやすくする
+  let duckT = null;
+  function duck(ms = 900) {
+    if (!AC || !bgmOn) return;
+    bgmGain.gain.setTargetAtTime(BGM_VOL * .25, AC.currentTime, .03);
+    clearTimeout(duckT); duckT = setTimeout(() => bgmOn && bgmGain.gain.setTargetAtTime(BGM_VOL, AC.currentTime, .3), ms);
+  }
+  let curVoice = null;
+  function playBuf(buf, rate = 1, gain = 2.4) {
+    duck(buf.duration * 1000 / rate + 300);
+    if (curVoice) { try { curVoice.stop(); } catch (_) {} }
+    const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = buf; s.playbackRate.value = rate; g.gain.value = gain;
+    s.connect(g); g.connect(master); s.start(); curVoice = s;
+  }
+  // 声ファイル集（voice/voices.json があれば使う。なければ読み上げ）
+  const VLIB = {}; let vlibCredit = '';
+  async function loadVoiceLib() {
+    try {
+      const j = await (await fetch('voice/voices.json', { cache: 'no-cache' })).json();
+      vlibCredit = j.credit || '';
+      for (const [k, files] of Object.entries(j.clips || {})) {
+        VLIB[k] = (await Promise.all(files.map(async f => { try { return await AC.decodeAudioData(await (await fetch('voice/' + f)).arrayBuffer()); } catch (_) { return null; } }))).filter(Boolean);
+      }
+      if (vlibCredit) $('#credit').textContent = '声：' + vlibCredit;
+    } catch (_) {}
+    updVstate();
+  }
+  function say(key, text, pitch) { if (VLIB[key] && VLIB[key].length) playBuf(pick(VLIB[key])); else speak(text, pitch); }
   let lastAta = 0;
   function sayAta() {
     const now = performance.now(); if (now - lastAta < 280) return; lastAta = now;
-    if (voiceBuf) { const s = AC.createBufferSource(); s.buffer = voiceBuf; s.playbackRate.value = rnd(.95, 1.2); const g = AC.createGain(); g.gain.value = 1.6; s.connect(g); g.connect(master); s.start(); }
+    if (voiceBuf) playBuf(voiceBuf, rnd(.95, 1.2), 2.6);
+    else if (VLIB.ata && VLIB.ata.length) playBuf(pick(VLIB.ata), rnd(.97, 1.08));
     else speak(pick(['あたっ！', 'あたっ', 'あたっ！']), rnd(1.15, 1.4));
   }
   function trim(buf) {
@@ -217,16 +294,17 @@
     try { const ab = await (await fetch(url)).arrayBuffer(); voiceBuf = trim(await AC.decodeAudioData(ab)); } catch (_) { voiceBuf = null; }
     updVstate();
   }
-  function updVstate() { $('#vstate').textContent = 'いまの声：' + (voiceBuf ? '🎙️ 録音した声' : '🗣️ よみあげ'); }
+  function updVstate() { $('#vstate').textContent = 'いまの声：' + (voiceBuf ? '🎙️ 録音した声' : (VLIB.ata && VLIB.ata.length) ? '🟢 ' + (vlibCredit || 'ボイス') : '🗣️ よみあげ'); }
 
-  // ================= ゲーム =================
-  let playing = false, score = 0, level = 1, shake = 0, lastTap = performance.now();
-  const floaters = [], parts = [], texts = [], confetti = [];
-  const PER_LEVEL = 20;
+  // ================= ゲーム（30びょう チャレンジ） =================
+  const GAME_MS = 30000;
+  let phase = 'title', menuOpen = false, score = 0, nextPraise = 10, remain = GAME_MS, lastNow = 0, lastSec = 30, shake = 0, lastTap = performance.now();
+  const active = () => (phase === 'count' || phase === 'play') && !menuOpen;
+  const floaters = [], parts = [], texts = [], confetti = [], plus = [];
 
   function spawnFloater() {
-    const r = rnd(42, 58);
-    floaters.push({ x: rnd(r, W - r), y: H + r + 10, r, vy: rnd(.6, 1.2), ph: rnd(0, 6), ch: pick(ANIMALS), col: pick(COLORS), pop: 0 });
+    const r = rnd(46, 62), gold = Math.random() < .12;
+    floaters.push({ x: rnd(r, W - r), y: H + r + 10, r, vy: rnd(.7, 1.4), ph: rnd(0, 6), ch: gold ? '🌟' : pick(ANIMALS), col: gold ? '#ffd21f' : pick(COLORS), gold, pop: 0 });
   }
   function burst(x, y, n, big) {
     for (let i = 0; i < n; i++) {
@@ -234,6 +312,7 @@
       parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 2, life: 1, col: pick(COLORS), sz: rnd(6, big ? 16 : 12), shape: pick(['star', 'heart', 'dot']), rot: rnd(0, 6) });
     }
   }
+  function updScore() { const el = $('#score'); el.textContent = '⭐ ' + score; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
   function tap(x, y) {
     lastTap = performance.now();
     if (texts.length > 10) texts.shift();
@@ -241,26 +320,93 @@
     burst(x, y, 14);
     sfxPop(); sayAta();
     if (navigator.vibrate) navigator.vibrate(15);
-    let add = 1;
-    const hit = floaters.find(f => !f.pop && Math.hypot(f.x - x, f.y - y) < f.r + 20);
-    if (hit) { hit.pop = 1; add = 3; burst(hit.x, hit.y, 26, true); sfxBubble(); shake = 10; for (let i = 0; i < 4; i++) parts.push({ x: hit.x, y: hit.y, vx: rnd(-5, 5), vy: rnd(-9, -4), life: 1, sz: 34, emo: hit.ch, rot: 0 }); }
-    else shake = Math.max(shake, 4);
-    score += add;
-    const el = $('#score'); el.textContent = '⭐ ' + score; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
-    if (Math.floor(score / PER_LEVEL) + 1 > level) levelUp();
+    // 点数が入るのは あわ（絵文字）に さわったときだけ
+    const hit = phase === 'play' && floaters.find(f => !f.pop && Math.hypot((f.dx ?? f.x) - x, f.y - y) < f.r + 25);
+    if (!hit) { shake = Math.max(shake, 4); return; }
+    const pts = hit.gold ? 3 : 1;
+    hit.pop = 1; burst(hit.dx ?? hit.x, hit.y, hit.gold ? 40 : 26, true); sfxBubble(); shake = 10;
+    for (let i = 0; i < 4; i++) parts.push({ x: hit.dx ?? hit.x, y: hit.y, vx: rnd(-5, 5), vy: rnd(-9, -4), life: 1, sz: 34, emo: hit.ch, rot: 0 });
+    plus.push({ x: hit.dx ?? hit.x, y: hit.y, t: 0, txt: '+' + pts, gold: hit.gold });
+    score += pts; updScore();
+    if (score >= nextPraise) { nextPraise += 10; praise(); }
   }
-  function levelUp() {
-    level++;
-    $('#lv').textContent = 'Lv.' + level;
-    const th = THEMES[(level - 1) % THEMES.length];
-    document.documentElement.style.setProperty('--bg1', th[0]); document.documentElement.style.setProperty('--bg2', th[1]);
-    const msg = PRAISE[(level - 2) % PRAISE.length];
-    const b = $('#banner'); b.textContent = msg; b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
+  function setTheme(i) { const th = THEMES[i % THEMES.length]; document.documentElement.style.setProperty('--bg1', th[0]); document.documentElement.style.setProperty('--bg2', th[1]); }
+  function banner(msg) { const b = $('#banner'); b.textContent = msg; b.classList.remove('on'); void b.offsetWidth; b.classList.add('on'); }
+  function confettiRain(n = 140) { for (let i = 0; i < n; i++) confetti.push({ x: rnd(0, W), y: rnd(-H * .6, -10), vx: rnd(-1, 1), vy: rnd(2, 5), rot: rnd(0, 6), vr: rnd(-.2, .2), w: rnd(8, 14), h: rnd(5, 9), col: pick(COLORS) }); }
+  let praiseN = 0;
+  function praise() {
+    const msg = PRAISE[praiseN % PRAISE.length]; praiseN++;
+    setTheme(praiseN); banner(msg);
     $('#flash').style.opacity = .7; setTimeout(() => $('#flash').style.opacity = 0, 120);
-    sfxFanfare(); setTimeout(() => speak(msg, 1.25), 500);
-    for (let i = 0; i < 140; i++) confetti.push({ x: rnd(0, W), y: rnd(-H * .6, -10), vx: rnd(-1, 1), vy: rnd(2, 5), rot: rnd(0, 6), vr: rnd(-.2, .2), w: rnd(8, 14), h: rnd(5, 9), col: pick(COLORS) });
+    sfxFanfare(); setTimeout(() => say('praise', msg), 450);
+    confettiRain();
     if (navigator.vibrate) navigator.vibrate([30, 40, 30, 40, 60]);
   }
+
+  // ---- タイマー ----
+  const beep = (f, d = .15, v = .25) => tone(f, AC.currentTime, { type: 'square', dur: d, v: v * .4 });
+  function updTimer() {
+    const sec = Math.max(0, Math.ceil(remain / 1000));
+    if (sec === lastSec) return; lastSec = sec;
+    const el = $('#timer'); el.textContent = '⏱ ' + sec; el.classList.toggle('warn', sec <= 5);
+    if (sec <= 5 && sec > 0) beep(880, .08);
+  }
+  let countT = [];
+  function startGame() {
+    initAudio(); AC.resume(); keepAwake();
+    try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); } catch (_) {}
+    countT.forEach(clearTimeout); countT = [];
+    phase = 'count'; score = 0; nextPraise = 10; praiseN = 0; remain = GAME_MS; lastSec = -1; updTimer(); setTheme(0);
+    $('#score').textContent = '⭐ 0';
+    ['#title', '#result', '#rank'].forEach(q => q === '#title' ? $(q).classList.add('hide') : $(q).classList.remove('on'));
+    $('#hud').classList.add('on'); $('#gear').classList.add('on');
+    for (let i = 0; i < 3; i++) setTimeout(spawnFloater, i * 300);
+    say('start', 'よーい、スタート！');
+    ['3', '2', '1'].forEach((n, i) => countT.push(setTimeout(() => { banner(n); beep(660, .12); }, 700 + i * 800)));
+    countT.push(setTimeout(() => { banner('スタート！'); beep(1320, .35); phase = 'play'; lastTap = performance.now(); }, 700 + 3 * 800));
+  }
+
+  // ---- きろく ----
+  const loadRecords = () => { try { return JSON.parse(store.get('shiho-records') || '[]'); } catch (_) { return []; } };
+  let lastRecordT = 0;
+  function endGame() {
+    phase = 'result'; remain = 0; updTimer();
+    const rs = loadRecords(), prevBest = rs.reduce((m, r) => Math.max(m, r.s), -1);
+    const rec = { s: score, t: Date.now() }; rs.push(rec); lastRecordT = rec.t;
+    store.set('shiho-records', JSON.stringify(rs.slice(-500)));
+    const rank = rs.filter(r => r.s > score).length + 1;
+    banner('おしまい！'); beep(523, .25); setTimeout(() => beep(392, .4), 250);
+    say('end', 'おしまい！');
+    const isBest = score > prevBest && prevBest >= 0;
+    setTimeout(() => {
+      $('#rScore').textContent = score;
+      $('#rRank').textContent = prevBest < 0 ? '🎉 はじめての きろく！' : isBest ? '👑 しんきろく！！' : `${rs.length}かい の なかで ${rank}い！`;
+      $('#result').classList.add('on');
+      if (isBest || prevBest < 0) { sfxFanfare(); confettiRain(200); setTimeout(() => say('best', 'しんきろく！'), 400); }
+      else setTimeout(() => speak(`${score}こ！`), 300);
+    }, 1400);
+  }
+  const fmt = t => { const d = new Date(t), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}(${'日月火水木金土'[d.getDay()]}) ${p(d.getHours())}:${p(d.getMinutes())}`; };
+  let rankTab = 'top';
+  function renderRank() {
+    const rs = loadRecords(), list = $('#list');
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === rankTab));
+    if (!rs.length) { $('#sum').textContent = ''; list.innerHTML = '<li class="empty">まだ きろくが ないよ。あそんでみよう！</li>'; return; }
+    const best = Math.max(...rs.map(r => r.s)), avg = rs.reduce((a, r) => a + r.s, 0) / rs.length;
+    $('#sum').textContent = `あそんだ かいすう ${rs.length}かい ・ さいこう ${best}こ ・ へいきん ${avg.toFixed(1)}こ`;
+    const rows = rankTab === 'top' ? [...rs].sort((a, b) => b.s - a.s || a.t - b.t).slice(0, 20) : [...rs].reverse().slice(0, 100);
+    list.innerHTML = rows.map((r, i) => {
+      const rk = rankTab === 'top' ? (['🥇', '🥈', '🥉'][i] || (i + 1)) : '';
+      const bar = rankTab === 'hist' ? `<div class="bar" style="width:${best ? Math.max(4, r.s / best * 100) : 4}%"></div>` : '';
+      return `<li class="${r.t === lastRecordT ? 'new' : ''}">${rk !== '' ? `<span class="rk">${rk}</span>` : ''}<span class="sc">${r.s}こ</span><span class="dt">${fmt(r.t)}${bar}</span></li>`;
+    }).join('');
+  }
+  function openRank() { renderRank(); $('#rank').classList.add('on'); }
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { rankTab = b.dataset.tab; renderRank(); });
+  $('#rankBtn').onclick = openRank; $('#toRank').onclick = openRank;
+  $('#rankClose').onclick = () => $('#rank').classList.remove('on');
+  $('#again').onclick = startGame;
+  $('#toTitle').onclick = () => { phase = 'title'; $('#result').classList.remove('on'); $('#hud').classList.remove('on'); $('#gear').classList.remove('on'); $('#title').classList.remove('hide'); setTheme(0); };
 
   // ---- 描画 ----
   function star(x, y, r, n = 5, inner = .45) { ctx.beginPath(); for (let i = 0; i < n * 2; i++) { const a = i * Math.PI / n - Math.PI / 2, rr = i % 2 ? r * inner : r; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath(); }
@@ -271,14 +417,16 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
     if (shake > .3) { ctx.translate(rnd(-shake, shake), rnd(-shake, shake)); shake *= .85; }
 
-    if (playing) {
-      if (now - lastSpawn > 1500 && floaters.length < 5) { spawnFloater(); lastSpawn = now; }
+    const dt = Math.min(100, now - (lastNow || now)); lastNow = now;
+    if (phase === 'play' && !menuOpen) { remain -= dt; updTimer(); if (remain <= 0) endGame(); }
+    if (active()) {
+      if (now - lastSpawn > 700 && floaters.filter(f => !f.pop).length < 7) { spawnFloater(); lastSpawn = now; }
       // しばらく触らないと「タップしてね」
-      if (now - lastTap > 5000) {
+      if (phase === 'play' && now - lastTap > 4000) {
         const k = (now / 500) % 2, s = 1 + Math.sin(now / 200) * .08;
         ctx.save(); ctx.globalAlpha = .9; ctx.drawImage(emo('👆'), W / 2 - 40 * s, H * .55 - 30 + (k < 1 ? -10 : 0), 80 * s, 80 * s);
         ctx.font = `26px ${FONT}`; ctx.textAlign = 'center'; ctx.lineWidth = 7; ctx.lineJoin = 'round'; ctx.strokeStyle = '#fff'; ctx.fillStyle = '#ff5c9d';
-        ctx.strokeText('タップしてね！', W / 2, H * .55 + 90); ctx.fillText('タップしてね！', W / 2, H * .55 + 90); ctx.restore();
+        ctx.strokeText('あわを タッチ！', W / 2, H * .55 + 90); ctx.fillText('あわを タッチ！', W / 2, H * .55 + 90); ctx.restore();
       }
     }
 
@@ -290,7 +438,7 @@
       if (f.y < -f.r - 20) { floaters.splice(i, 1); continue; }
       const sc = f.pop ? 1 + (f.pop - 1) * .6 : 1 + Math.sin(f.ph * 2) * .04;
       ctx.save(); ctx.globalAlpha = f.pop ? Math.max(0, 2 - f.pop) : 1; ctx.translate(x, f.y); ctx.scale(sc, sc);
-      ctx.beginPath(); ctx.arc(0, 0, f.r, 0, Math.PI * 2); ctx.fillStyle = f.col + '55'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#ffffffcc'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, f.r, 0, Math.PI * 2); ctx.fillStyle = f.col + '55'; ctx.fill(); ctx.lineWidth = f.gold ? 7 : 4; ctx.strokeStyle = f.gold ? '#ffd21f' : '#ffffffcc'; ctx.stroke();
       ctx.beginPath(); ctx.ellipse(-f.r * .4, -f.r * .45, f.r * .22, f.r * .12, -.6, 0, Math.PI * 2); ctx.fillStyle = '#ffffffaa'; ctx.fill();
       ctx.drawImage(emo(f.ch), -f.r * .8, -f.r * .8, f.r * 1.6, f.r * 1.6);
       ctx.restore(); f.dx = x;
@@ -317,6 +465,14 @@
       ctx.restore();
     }
 
+    // +1 の文字
+    for (let i = plus.length - 1; i >= 0; i--) {
+      const p = plus[i]; p.t += 1 / 50; if (p.t >= 1) { plus.splice(i, 1); continue; }
+      ctx.save(); ctx.globalAlpha = p.t > .6 ? 1 - (p.t - .6) / .4 : 1; ctx.translate(p.x, p.y - 30 - p.t * 70); const sc = p.t < .2 ? easeBack(p.t / .2) : 1; ctx.scale(sc, sc);
+      ctx.font = `${p.gold ? 54 : 44}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+      ctx.lineWidth = 10; ctx.strokeStyle = '#fff'; ctx.strokeText(p.txt, 0, 0); ctx.fillStyle = p.gold ? '#ffb300' : '#ff9f1a'; ctx.fillText(p.txt, 0, 0); ctx.restore();
+    }
+
     // 紙ふぶき
     for (let i = confetti.length - 1; i >= 0; i--) {
       const c = confetti[i]; c.x += c.vx + Math.sin(c.y / 30); c.y += c.vy; c.rot += c.vr;
@@ -327,7 +483,7 @@
   }
   requestAnimationFrame(frame);
 
-  cv.addEventListener('pointerdown', e => { if (playing) { e.preventDefault(); tap(e.clientX, e.clientY); } });
+  cv.addEventListener('pointerdown', e => { if (active()) { e.preventDefault(); tap(e.clientX, e.clientY); } });
   addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('gesturestart', e => e.preventDefault());
 
@@ -349,26 +505,18 @@
   // ---- スタート ----
   let wake = null;
   async function keepAwake() { try { if (navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch (_) {} }
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && playing) { keepAwake(); if (AC) AC.resume(); } });
-  $('#play').addEventListener('click', () => {
-    initAudio(); AC.resume(); sfxFanfare();
-    speak('あそぼう！', 1.3);
-    try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); } catch (_) {}
-    keepAwake();
-    $('#title').classList.add('hide'); $('#hud').classList.add('on'); $('#gear').classList.add('on');
-    playing = true; lastTap = performance.now();
-    for (let i = 0; i < 3; i++) setTimeout(spawnFloater, i * 400);
-  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && phase !== 'title') { keepAwake(); if (AC) AC.resume(); } });
+  $('#play').addEventListener('click', startGame);
 
   // ---- おとなメニュー（長押しで開く） ----
   const gear = $('#gear'); let holdT = null;
   gear.addEventListener('pointerdown', e => { e.stopPropagation(); gear.classList.add('hold'); holdT = setTimeout(openMenu, 1200); });
   const cancelHold = () => { clearTimeout(holdT); gear.classList.remove('hold'); };
   gear.addEventListener('pointerup', cancelHold); gear.addEventListener('pointerleave', cancelHold); gear.addEventListener('pointercancel', cancelHold);
-  function openMenu() { cancelHold(); playing = false; $('#menu').classList.add('on'); updVstate(); updBgm(); }
-  $('#close').onclick = () => { $('#menu').classList.remove('on'); playing = true; lastTap = performance.now(); };
+  function openMenu() { cancelHold(); menuOpen = true; $('#menu').classList.add('on'); updVstate(); updBgm(); }
+  $('#close').onclick = () => { $('#menu').classList.remove('on'); menuOpen = false; lastTap = performance.now(); };
   function updBgm() { $('#bgm').textContent = '🎵 BGM：' + (bgmOn ? 'オン' : 'オフ'); }
-  $('#bgm').onclick = () => { bgmOn = !bgmOn; store.set('shiho-bgm', bgmOn ? 'on' : 'off'); if (AC) bgmGain.gain.setTargetAtTime(bgmOn ? .22 : 0, AC.currentTime, .1); updBgm(); };
+  $('#bgm').onclick = () => { bgmOn = !bgmOn; store.set('shiho-bgm', bgmOn ? 'on' : 'off'); if (AC) bgmGain.gain.setTargetAtTime(bgmOn ? BGM_VOL : 0, AC.currentTime, .1); updBgm(); };
   $('#vol').value = vol;
   $('#vol').oninput = e => { vol = +e.target.value; store.set('shiho-vol', vol); if (AC) master.gain.setTargetAtTime(vol, AC.currentTime, .05); };
   $('#try').onclick = () => { lastAta = 0; sayAta(); };
