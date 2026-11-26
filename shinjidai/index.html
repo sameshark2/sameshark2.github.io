@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060a">
+<title>新時代 — スマホが筆になる</title>
+<style>
+  :root { --fg:#f2f4ff; --dim:rgba(242,244,255,.6); --glass:rgba(255,255,255,.08); --line:rgba(255,255,255,.18); }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:#05060a; color:var(--fg); overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif; touch-action:none; overscroll-behavior:none; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #intro { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:20px; padding:24px; text-align:center; background:radial-gradient(circle at 50% 40%,#1a1440 0%,#05060a 70%); z-index:10; transition:opacity .6s; }
+  #intro.hide { opacity:0; pointer-events:none; }
+  h1 { margin:0; font-size:clamp(48px,16vw,96px); letter-spacing:.08em; font-weight:800;
+    background:linear-gradient(90deg,#7cf,#c7f,#f8a,#fd6); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #intro p { margin:0; max-width:340px; line-height:1.8; color:var(--dim); font-size:15px; }
+  ul.how { list-style:none; padding:0; margin:0; text-align:left; font-size:14px; line-height:2; color:var(--fg); }
+  button { font:inherit; color:var(--fg); background:var(--glass); border:1px solid var(--line); border-radius:999px;
+    padding:12px 20px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); cursor:pointer; }
+  #start { font-size:18px; padding:16px 44px; background:linear-gradient(90deg,#5b8cff,#b45bff); border:none; font-weight:700; }
+  #bar { position:fixed; left:0; right:0; bottom:0; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom)); z-index:5; }
+  #hud { position:fixed; top:calc(10px + env(safe-area-inset-top)); left:16px; right:16px; z-index:5; font-size:12px;
+    font-variant-numeric:tabular-nums; color:var(--dim); display:none; line-height:1.6; pointer-events:none;
+    background:rgba(0,0,0,.35); border-radius:12px; padding:8px 12px; }
+  #hud.show { display:block; }
+  #toast { position:fixed; top:40%; left:50%; transform:translate(-50%,-50%); font-size:28px; font-weight:800; letter-spacing:.1em;
+    opacity:0; transition:opacity .4s; z-index:6; pointer-events:none; text-shadow:0 0 20px rgba(0,0,0,.6); }
+  #toast.on { opacity:1; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="intro">
+  <h1>新時代</h1>
+  <p>あなたのスマホのセンサーが、そのまま筆になる。<br>傾き・揺れ・指先・時間・場所から、今この瞬間だけの絵が生まれます。</p>
+  <ul class="how">
+    <li>📱 傾ける → 光が流れる方向が変わる</li>
+    <li>👆 触る → 光が湧き出す</li>
+    <li>🫨 振る → 色の世界が切り替わる</li>
+    <li>🕒 時刻と場所 → 最初の色が決まる</li>
+  </ul>
+  <button id="start">はじめる</button>
+  <p style="font-size:12px">センサーの許可を求められたら「許可」を押してください。<br>データは端末の中だけで使われ、送信されません。</p>
+</div>
+
+<div id="hud"></div>
+<div id="toast"></div>
+<div id="bar" hidden>
+  <button id="save">💾 保存</button>
+  <button id="clear">🧹 消す</button>
+  <button id="info">📊 センサー</button>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  let W, H, DPR;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * DPR; cv.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H);
+  }
+  addEventListener('resize', resize); resize();
+
+  // ---- センサー状態 ----
+  const S = { gx: 0, gy: 0.15, beta: null, gamma: null, acc: 0, lat: null, lon: null, battery: null, touches: [] };
+  let baseHue = (new Date().getHours() / 24) * 360; // 時刻で最初の色
+  let paletteShift = 0;
+  const palettes = [[0, 40, 80], [180, 220, 260], [300, 330, 20], [90, 140, 190], [0, 120, 240]];
+  let pIdx = 0;
+
+  function onOrient(e) {
+    if (e.beta == null) return;
+    S.beta = e.beta; S.gamma = e.gamma;
+    // 画面の向きを考慮して重力方向に変換
+    const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+    let x = e.gamma / 45, y = e.beta / 45;
+    if (ang === 90) [x, y] = [y, -x]; else if (ang === -90 || ang === 270) [x, y] = [-y, x];
+    S.gx = Math.max(-1, Math.min(1, x)) * 0.35;
+    S.gy = Math.max(-1, Math.min(1, y)) * 0.35;
+  }
+  let lastShake = 0;
+  function onMotion(e) {
+    const a = e.acceleration && e.acceleration.x != null ? e.acceleration : null;
+    if (!a) return;
+    S.acc = Math.hypot(a.x, a.y, a.z);
+    const now = performance.now();
+    if (S.acc > 18 && now - lastShake > 1200) { lastShake = now; shake(); }
+  }
+  function shake() {
+    pIdx = (pIdx + 1) % palettes.length;
+    paletteShift = Math.random() * 360;
+    if (navigator.vibrate) navigator.vibrate([40, 40, 80]);
+    toast('新しい世界');
+    for (let i = 0; i < 300; i++) spawn(W / 2, H / 2, 8);
+  }
+
+  async function start() {
+    // iOS はユーザー操作中に許可が必要
+    try {
+      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function')
+        await DeviceOrientationEvent.requestPermission();
+      if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function')
+        await DeviceMotionEvent.requestPermission();
+    } catch (_) {}
+    addEventListener('deviceorientation', onOrient);
+    addEventListener('devicemotion', onMotion);
+    if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => {
+      S.lat = p.coords.latitude; S.lon = p.coords.longitude;
+      baseHue = (baseHue + Math.abs(S.lat * 7 + S.lon * 3)) % 360; // 場所で色をずらす
+      toast('📍 この場所の色');
+    }, () => {}, { timeout: 8000 });
+    if (navigator.getBattery) navigator.getBattery().then(b => {
+      const upd = () => S.battery = b.level; upd(); b.addEventListener('levelchange', upd);
+    });
+    document.getElementById('intro').classList.add('hide');
+    document.getElementById('bar').hidden = false;
+    if (navigator.vibrate) navigator.vibrate(30);
+  }
+  document.getElementById('start').onclick = start;
+
+  // ---- タッチ / マウス ----
+  const ptrs = new Map();
+  cv.addEventListener('pointerdown', e => { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY }); });
+  cv.addEventListener('pointermove', e => {
+    const p = ptrs.get(e.pointerId);
+    if (p) { p.px = p.x; p.py = p.y; p.x = e.clientX; p.y = e.clientY; }
+    else if (e.pointerType === 'mouse' && S.beta == null) { // PC: マウス位置で重力
+      S.gx = (e.clientX / W - .5) * .5; S.gy = (e.clientY / H - .5) * .5;
+    }
+  });
+  const up = e => ptrs.delete(e.pointerId);
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  addEventListener('keydown', e => { if (e.key === ' ') shake(); });
+
+  // ---- パーティクル ----
+  const P = [], MAX = 2500;
+  function spawn(x, y, sp = 2, vx0 = 0, vy0 = 0) {
+    if (P.length >= MAX) P.shift();
+    const a = Math.random() * Math.PI * 2, s = Math.random() * sp;
+    const pal = palettes[pIdx];
+    const hue = (baseHue + paletteShift + pal[(Math.random() * 3) | 0] + Math.random() * 20) % 360;
+    P.push({ x, y, vx: Math.cos(a) * s + vx0, vy: Math.sin(a) * s + vy0, life: 1, hue, r: 1 + Math.random() * 2.2 });
+  }
+
+  // ---- メインループ ----
+  let t = 0;
+  function frame() {
+    t++;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(5,6,10,0.06)'; ctx.fillRect(0, 0, W, H);
+
+    // 指先から湧き出す
+    for (const p of ptrs.values()) {
+      const vx = (p.x - p.px) * .3, vy = (p.y - p.py) * .3;
+      for (let i = 0; i < 6; i++) spawn(p.x, p.y, 2.5, vx, vy);
+      p.px = p.x; p.py = p.y;
+    }
+    // 何もしなくても少しずつ生まれる
+    if (t % 3 === 0) spawn(Math.random() * W, Math.random() * H, .5);
+
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = P.length - 1; i >= 0; i--) {
+      const p = P[i];
+      // 流れ場 + 重力（傾き）
+      const n = Math.sin(p.x * .006 + t * .01) + Math.cos(p.y * .006 - t * .008);
+      p.vx += S.gx + Math.cos(n * Math.PI) * .04;
+      p.vy += S.gy + Math.sin(n * Math.PI) * .04;
+      p.vx *= .97; p.vy *= .97;
+      const ox = p.x, oy = p.y;
+      p.x += p.vx; p.y += p.vy;
+      // 壁で跳ね返る
+      if (p.x < 0 || p.x > W) { p.vx *= -.7; p.x = Math.max(0, Math.min(W, p.x)); }
+      if (p.y < 0 || p.y > H) { p.vy *= -.7; p.y = Math.max(0, Math.min(H, p.y)); }
+      p.life -= .0035;
+      if (p.life <= 0) { P.splice(i, 1); continue; }
+      ctx.strokeStyle = `hsla(${p.hue},90%,62%,${p.life * .8})`;
+      ctx.lineWidth = p.r;
+      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(p.x, p.y); ctx.stroke();
+    }
+    if (hud.classList.contains('show') && t % 6 === 0) drawHud();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---- UI ----
+  const hud = document.getElementById('hud');
+  const f = (v, d = 1) => v == null ? '—' : v.toFixed(d);
+  function drawHud() {
+    hud.innerHTML =
+      `傾き 前後 ${f(S.beta)}° / 左右 ${f(S.gamma)}°<br>` +
+      `揺れ ${f(S.acc)} m/s² ・ 光の粒 ${P.length}<br>` +
+      `位置 ${S.lat == null ? '—' : f(S.lat, 3) + ', ' + f(S.lon, 3)} ・ ` +
+      `電池 ${S.battery == null ? '—' : Math.round(S.battery * 100) + '%'} ・ 色相 ${Math.round(baseHue)}°`;
+  }
+  document.getElementById('info').onclick = () => { hud.classList.toggle('show'); drawHud(); };
+  document.getElementById('clear').onclick = () => { P.length = 0; ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H); };
+  document.getElementById('save').onclick = () => {
+    cv.toBlob(async blob => {
+      const name = `shinjidai-${Date.now()}.png`;
+      const file = new File([blob], name, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: '新時代' }); return; } catch (_) { return; }
+      }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    });
+  };
+  const toastEl = document.getElementById('toast');
+  let tt;
+  function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => toastEl.classList.remove('on'), 1400); }
+})();
+</script>
+</body>
+</html>
