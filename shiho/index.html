@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-title" content="しほんぬ">
 <meta name="theme-color" content="#ffd6e8">
 <title>しほんぬタッピング！</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap" rel="stylesheet">
@@ -28,6 +31,10 @@
   .logo span { display:inline-block; color:#fff; animation:hop 1.2s ease-in-out infinite;
     -webkit-text-stroke:0; text-shadow: 0 4px 0 var(--c), 3px 3px 0 var(--c), -3px 3px 0 var(--c), 3px -3px 0 var(--c), -3px -3px 0 var(--c), 0 10px 18px rgba(0,0,0,.15); }
   @keyframes hop { 0%,100% { transform:translateY(0) } 30% { transform:translateY(-14px) rotate(-6deg) } 60% { transform:translateY(0) rotate(4deg) } }
+  .logo span.boing, .deco.boing { animation:boing .5s ease-out !important; }
+  @keyframes boing { 0% { transform:scale(1) } 25% { transform:scale(1.45,.7) } 50% { transform:scale(.8,1.3) translateY(-18px) } 75% { transform:scale(1.1,.9) } 100% { transform:scale(1) } }
+  .deco { cursor:pointer; padding:10px; }
+  #hint { font-size:14px; color:#b07a9e; animation:float 2s ease-in-out infinite; }
   .for { font-size:18px; background:#fff; color:var(--pink); padding:8px 18px; border-radius:999px; box-shadow:0 4px 0 #ffb3cf; }
   #play { font-family:var(--font); font-size:34px; color:#fff; background:linear-gradient(#ff7eb3,#ff4f93); border:none; border-radius:999px;
     padding:18px 64px; box-shadow:0 8px 0 #d6336f, 0 14px 24px rgba(214,51,111,.35); cursor:pointer; animation:pulse 1.4s ease-in-out infinite; }
@@ -80,6 +87,7 @@
   <h1 class="logo" id="logo"></h1>
   <div class="for">💕 しほちゃん せんよう 💕</div>
   <button id="play">あそぶ！</button>
+  <div id="hint">🎵 もじや どうぶつを さわってみてね</div>
 </div>
 
 <div id="hud"><div class="pill" id="score">⭐ 0</div><div class="pill" id="lv">Lv.1</div></div>
@@ -91,6 +99,7 @@
     <h2>おとなメニュー</h2>
     <p>「あたっ！」の声を録音できます。<br>ボタンを押したら すぐに「あたっ！」と言ってね。</p>
     <div id="vstate">いまの声：よみあげ</div>
+    <div class="row">🗣️<select id="vsel" style="flex:1;font-size:14px;padding:8px;border-radius:10px;border:2px solid #ffc2da"></select></div>
     <button class="b-rec" id="rec">🎙️ 録音する（2びょう）</button>
     <button class="b-try" id="try">▶️ きいてみる</button>
     <button class="b-del" id="del">🗑️ 録音を消す</button>
@@ -172,19 +181,29 @@
 
   // 「あたっ！」の声：録音があればそれを、なければ読み上げ
   let jaVoice = null;
-  function findVoice() { const v = speechSynthesis.getVoices().filter(v => /ja/i.test(v.lang)); jaVoice = v.find(v => /Kyoko|O-ren|Nanami|Haruka/i.test(v.name)) || v[0] || null; }
+  // 自然に聞こえる声を優先して選ぶ（高品質版 > 有名な日本語ボイス > その他）
+  const vscore = v => (/Premium|プレミアム|Enhanced|拡張|Natural|Neural|Online|Siri/i.test(v.name) ? 10 : 0) + (/Google/i.test(v.name) ? 6 : 0) + (/Kyoko|O-ren|Nanami|Hattori|Haruka|Ayumi/i.test(v.name) ? 3 : 0) + (v.localService ? 0 : 1);
+  let jaVoices = [];
+  function findVoice() {
+    jaVoices = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang)).sort((a, b) => vscore(b) - vscore(a));
+    const saved = store.get('shiho-tts');
+    jaVoice = jaVoices.find(v => v.name === saved) || jaVoices[0] || null;
+    const sel = document.getElementById('vsel'); if (!sel) return;
+    sel.innerHTML = jaVoices.length ? '' : '<option>（日本語の声がありません）</option>';
+    jaVoices.forEach(v => { const o = document.createElement('option'); o.value = v.name; o.textContent = 'よみあげ：' + v.name; if (v === jaVoice) o.selected = true; sel.appendChild(o); });
+  }
   if ('speechSynthesis' in window) { findVoice(); speechSynthesis.onvoiceschanged = findVoice; }
   function speak(text, pitch = 1.8) {
     if (!('speechSynthesis' in window)) return;
     if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text); u.lang = 'ja-JP'; if (jaVoice) u.voice = jaVoice;
-    u.pitch = pitch; u.rate = 1.15; u.volume = Math.min(1, vol * 1.2); speechSynthesis.speak(u);
+    u.pitch = pitch; u.rate = 1.05; u.volume = Math.min(1, vol * 1.2); speechSynthesis.speak(u);
   }
   let lastAta = 0;
   function sayAta() {
     const now = performance.now(); if (now - lastAta < 280) return; lastAta = now;
     if (voiceBuf) { const s = AC.createBufferSource(); s.buffer = voiceBuf; s.playbackRate.value = rnd(.95, 1.2); const g = AC.createGain(); g.gain.value = 1.6; s.connect(g); g.connect(master); s.start(); }
-    else speak('あたっ！', rnd(1.6, 2));
+    else speak(pick(['あたっ！', 'あたっ', 'あたっ！']), rnd(1.15, 1.4));
   }
   function trim(buf) {
     const d = buf.getChannelData(0); let a = 0, b = d.length - 1; const th = .025;
@@ -238,7 +257,7 @@
     const msg = PRAISE[(level - 2) % PRAISE.length];
     const b = $('#banner'); b.textContent = msg; b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
     $('#flash').style.opacity = .7; setTimeout(() => $('#flash').style.opacity = 0, 120);
-    sfxFanfare(); setTimeout(() => speak(msg, 1.6), 500);
+    sfxFanfare(); setTimeout(() => speak(msg, 1.25), 500);
     for (let i = 0; i < 140; i++) confetti.push({ x: rnd(0, W), y: rnd(-H * .6, -10), vx: rnd(-1, 1), vy: rnd(2, 5), rot: rnd(0, 6), vr: rnd(-.2, .2), w: rnd(8, 14), h: rnd(5, 9), col: pick(COLORS) });
     if (navigator.vibrate) navigator.vibrate([30, 40, 30, 40, 60]);
   }
@@ -312,13 +331,28 @@
   addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('gesturestart', e => e.preventDefault());
 
+  // ---- タイトル画面の音 ----
+  const XYLO = [523, 587, 659, 698, 784, 880, 988, 1047, 1175, 1319];
+  function xylo(f) { const t = AC.currentTime; tone(f, t, { dur: .7, v: .35 }); tone(f * 4, t, { dur: .12, v: .08 }); tone(f * 2.76, t, { dur: .25, v: .05 }); }
+  function boingSfx() { const t = AC.currentTime, f = rnd(220, 330); tone(f, t, { type: 'triangle', dur: .35, v: .3, to: f * 2.5 }); tone(f * 1.5, t + .12, { dur: .25, v: .15, to: f * 3 }); }
+  function boing(el) { el.classList.remove('boing'); void el.offsetWidth; el.classList.add('boing'); }
+  $('#title').addEventListener('pointerdown', e => {
+    if (e.target.id === 'play') return;
+    initAudio(); AC.resume();
+    const span = e.target.closest('.logo span'), deco = e.target.closest('.deco');
+    if (span) { boing(span); xylo(XYLO[[...$('#logo').querySelectorAll('span')].indexOf(span) % XYLO.length]); }
+    else if (deco) { boing(deco); boingSfx(); }
+    else { const t = AC.currentTime; [0, 2, 4].forEach((k, i) => tone(XYLO[k + ((Math.random() * 3) | 0)], t + i * .07, { dur: .4, v: .2 })); }
+  });
+  $('#vsel').onchange = e => { jaVoice = jaVoices.find(v => v.name === e.target.value) || jaVoice; store.set('shiho-tts', jaVoice ? jaVoice.name : ''); lastAta = 0; sayAta(); };
+
   // ---- スタート ----
   let wake = null;
   async function keepAwake() { try { if (navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch (_) {} }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && playing) { keepAwake(); if (AC) AC.resume(); } });
   $('#play').addEventListener('click', () => {
-    initAudio(); AC.resume();
-    speak('あそぼう！', 1.7);
+    initAudio(); AC.resume(); sfxFanfare();
+    speak('あそぼう！', 1.3);
     try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); } catch (_) {}
     keepAwake();
     $('#title').classList.add('hide'); $('#hud').classList.add('on'); $('#gear').classList.add('on');
